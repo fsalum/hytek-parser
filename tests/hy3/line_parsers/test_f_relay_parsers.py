@@ -164,6 +164,30 @@ class TestF3DictKeyedSwimmers(unittest.TestCase):
         self.assertEqual(entry.swimmers, {})
 
 
+class TestF1FloatDistance(unittest.TestCase):
+    """distance is a float on relay events too, so non-integer open-water
+    distances survive the parse, mirroring E1 behaviour."""
+
+    def _make_file(self):
+        opts = {"default_country": "USA"}
+        file = ParsedHytekFile()
+        file.meet = Meet()
+        file.meet.last_team = (
+            "TST",
+            Team("Test Team", "TST", "TST", "", "", "", "", "", "", "", "", "", "", "", {}),
+        )
+        return file, opts
+
+    def test_float_distance_preserved(self):
+        """'   2.4' (open-water relay) -> distance=2.4."""
+        file, opts = self._make_file()
+        # distance field (cols 16-21) = '   2.4'; safe_cast(float, '2.4') -> 2.4
+        f1 = "F1TST  A   0FFG   2.4E  0109  0S 30.00  4   112.37Y  112.37Y   52.00    0.00   NN   4           NA                              29"
+        file = f1_parser(f1, file, opts)
+        event = file.meet.events["4"]
+        self.assertEqual(2.4, event.distance)
+
+
 class TestF2BackupTimingFields(unittest.TestCase):
     """F2 timing fields. Same offsets as E2 for the five timing
     columns; alt_time_code at col 111 (NOT 96) because F2's date is at col 103."""

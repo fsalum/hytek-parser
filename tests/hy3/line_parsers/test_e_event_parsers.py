@@ -69,6 +69,49 @@ class TestEEventParser(unittest.TestCase):
         self.assertEqual(True, event.entries[1].exhibition)
 
 
+class TestE1FloatDistance(unittest.TestCase):
+    """distance is a float, so non-integer values (e.g. open-water '2.4' miles)
+    survive the parse instead of being truncated to 0 by an int cast."""
+
+    def _build_file(self):
+        opts = {"default_country": "USA"}
+        file = ParsedHytekFile()
+        file.meet = Meet()
+        file.meet.last_team = (
+            "TST",
+            Team("Test Team", "TST", "TST", "", "", "", "", "", "", "", "", "", "", "", {}),
+        )
+        # Synthetic swimmer — placeholder name, no real person
+        d_line = "D1M   10Doe                 John                                                        01011990 30                             10"
+        file = d1_parser(d_line, file, opts)
+        return file, opts
+
+    def test_float_distance_preserved(self):
+        """'   2.4' (open-water miles) -> distance=2.4."""
+        file, opts = self._build_file()
+        # distance field (cols 16-21) = '   2.4'; safe_cast(float, '2.4') -> 2.4
+        e1 = "E1M   10Doe  MM   2.4A 11109  0U  0.00  1    30.00S   30.00S    0.00    0.00  0NN               N                               70"
+        file = e1_parser(e1, file, opts)
+        event = file.meet.events["1"]
+        self.assertEqual(2.4, event.distance)
+
+    def test_integer_distance_is_float(self):
+        """'  1000' -> distance=1000.0."""
+        file, opts = self._build_file()
+        e1 = "E1M   10Doe  MM  1000A 11109  0U  0.00  2    30.00S   30.00S    0.00    0.00  0NN               N                               70"
+        file = e1_parser(e1, file, opts)
+        event = file.meet.events["2"]
+        self.assertEqual(1000.0, event.distance)
+
+    def test_blank_distance_is_zero(self):
+        """Blank distance field -> distance=0.0."""
+        file, opts = self._build_file()
+        e1 = "E1M   10Doe  MM      A 11109  0U  0.00  3    30.00S   30.00S    0.00    0.00  0NN               N                               70"
+        file = e1_parser(e1, file, opts)
+        event = file.meet.events["3"]
+        self.assertEqual(0.0, event.distance)
+
+
 class TestE2BlankDateColumn(unittest.TestCase):
     """Bug 1 — MM2 2.0 (and other MM versions) export E2 lines with a blank
     date column. e2_parser must populate timing fields and leave date as None
