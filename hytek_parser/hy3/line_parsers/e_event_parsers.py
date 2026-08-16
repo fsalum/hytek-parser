@@ -12,6 +12,7 @@ from hytek_parser.hy3.enums import (
     Stroke,
     WithTimeTimeCode,
 )
+from hytek_parser.hy3.line_parsers.h_dq_parsers import LAST_DQ_SLOT_KEY
 from hytek_parser.hy3.schemas import DisqualificationInfo, ParsedHytekFile
 
 
@@ -154,6 +155,12 @@ def e2_parser(
     setattr(entry, f"{prefix}_backup_4_time", backup_4_time)
     setattr(entry, f"{prefix}_reaction_time", reaction_time)
     setattr(entry, f"{prefix}_alt_time_code", alt_time_code)
+
+    # Anchor the H1 reason / H2 detail lines that follow to this DQ slot (see
+    # h_dq_parsers). File position is the only signal that survives a same-code
+    # prelim+finals double-DQ; clear it on a non-DQ result so a later orphaned
+    # H1/H2 does not attach to a stale slot.
+    opts[LAST_DQ_SLOT_KEY] = f"{prefix}_dq_info" if dq_info is not None else None
 
     event.last_entry = entry
     file.meet.last_event = (event_num, event)

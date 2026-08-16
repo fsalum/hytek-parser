@@ -321,5 +321,51 @@ class TestE2ReactionTime(unittest.TestCase):
         self.assertEqual(datetime.date(2026, 7, 26), entry.prelim_date)
 
 
+class TestE2DqSlotAnchor(unittest.TestCase):
+    """e2_parser records the DQ slot it populates under opts[LAST_DQ_SLOT_KEY] so
+    the H1/H2 detail lines that follow attach to that slot; a non-DQ result
+    clears it."""
+
+    def _build_file(self):
+        opts = {"default_country": "USA"}
+        file = ParsedHytekFile()
+        file.meet = Meet()
+        file.meet.last_team = ("FOO", Team("Foo Bar", "FOO", "foo", "", "", "", "", "", "", "", "", "", "", "", {}))
+        d_line = "D1M   27Hansen              Mads                                                        10272010 13                             27"
+        e1_line = "E1M   27HanseXX    50D 11109  0U  0.00 22X   37.41S   37.41S    0.00    0.00  0NN               N                               70"
+        file = d1_parser(d_line, file, opts)
+        file = e1_parser(e1_line, file, opts)
+        return file, opts
+
+    @staticmethod
+    def _e2_dq(result_type, dq_code):
+        base = "E2P   38.78L       0  1  3  6  34  0   38.87   38.63    0.00        38.78     0.00 0.5607242026    0                            27"
+        line = list(base)
+        line[2] = result_type          # col 3: P / S / F
+        line[12] = "Q"                 # col 13: DISQUALIFICATION time code
+        line[13], line[14] = dq_code[0], dq_code[1]  # cols 14-15: DQ code
+        return "".join(line)
+
+    def test_finals_dq_sets_anchor(self):
+        from hytek_parser.hy3.line_parsers.h_dq_parsers import LAST_DQ_SLOT_KEY
+        file, opts = self._build_file()
+        file = e2_parser(self._e2_dq("F", "7T"), file, opts)
+        self.assertEqual("finals_dq_info", opts[LAST_DQ_SLOT_KEY])
+
+    def test_prelim_dq_sets_anchor(self):
+        from hytek_parser.hy3.line_parsers.h_dq_parsers import LAST_DQ_SLOT_KEY
+        file, opts = self._build_file()
+        file = e2_parser(self._e2_dq("P", "1M"), file, opts)
+        self.assertEqual("prelim_dq_info", opts[LAST_DQ_SLOT_KEY])
+
+    def test_non_dq_clears_anchor(self):
+        from hytek_parser.hy3.line_parsers.h_dq_parsers import LAST_DQ_SLOT_KEY
+        file, opts = self._build_file()
+        opts[LAST_DQ_SLOT_KEY] = "finals_dq_info"  # stale from a prior DQ
+        clean = "E2P   38.78L       0  1  3  6  34  0   38.87   38.63    0.00        38.78     0.00 0.5607242026    0                            27"
+        file = e2_parser(clean, file, opts)
+        self.assertIsNone(opts[LAST_DQ_SLOT_KEY])
+
+
 if __name__=='__main__':
     unittest.main()

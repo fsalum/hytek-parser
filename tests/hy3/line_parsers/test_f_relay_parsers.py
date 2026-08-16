@@ -291,5 +291,47 @@ class TestF2ReactionTimes(unittest.TestCase):
         self.assertAlmostEqual(272.84, entry.finals_pad_time, places=2)
 
 
+class TestF2DqSlotAnchor(unittest.TestCase):
+    """f2_parser anchors the DQ slot it populates under opts[LAST_DQ_SLOT_KEY],
+    mirroring e2_parser, so relay H1/H2 detail lines attach to the right slot."""
+
+    def _build_file_with_relay_entry(self):
+        opts = {"default_country": "USA"}
+        file = ParsedHytekFile()
+        file.meet = Meet()
+        file.meet.last_team = (
+            "FOO",
+            Team("Foo Bar", "FOO", "FOO", "", "", "", "", "", "", "", "", "", "", "", {}),
+        )
+        f1_line = "F1FOO  A   0FFG   200E  0109  0S 30.00  2   112.37Y  112.37Y   52.00    0.00   NN   4           NA                              29"
+        file = f1_parser(f1_line, file, opts)
+        return file, opts
+
+    @staticmethod
+    def _f2_dq(result_type, dq_code):
+        base = "F2F  121.77L       0  1  6  3  11  0  121.70  121.98    0.00       121.77     0.00 0.64 0.47 0.40-0.2907242026    0       0     19"
+        line = list(base)
+        line[2] = result_type          # col 3: P / S / F
+        line[12] = "Q"                 # col 13: DISQUALIFICATION time code
+        line[13], line[14] = dq_code[0], dq_code[1]  # cols 14-15: DQ code
+        return "".join(line)
+
+    def test_finals_relay_dq_sets_anchor(self):
+        from hytek_parser.hy3.line_parsers.h_dq_parsers import LAST_DQ_SLOT_KEY
+        file, opts = self._build_file_with_relay_entry()
+        # 6A = relay stroke infraction, swimmer 1 — an H2 code cannot self-identify
+        # this slot, so the anchor is the only signal.
+        file = f2_parser(self._f2_dq("F", "6A"), file, opts)
+        self.assertEqual("finals_dq_info", opts[LAST_DQ_SLOT_KEY])
+
+    def test_non_dq_relay_clears_anchor(self):
+        from hytek_parser.hy3.line_parsers.h_dq_parsers import LAST_DQ_SLOT_KEY
+        file, opts = self._build_file_with_relay_entry()
+        opts[LAST_DQ_SLOT_KEY] = "finals_dq_info"  # stale
+        clean = "F2F  121.77L       0  1  6  3  11  0  121.70  121.98    0.00       121.77     0.00 0.64 0.47 0.40-0.2907242026    0       0     19"
+        file = f2_parser(clean, file, opts)
+        self.assertIsNone(opts[LAST_DQ_SLOT_KEY])
+
+
 if __name__ == "__main__":
     unittest.main()
