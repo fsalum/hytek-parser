@@ -30,7 +30,7 @@ def f1_parser(
     # Get event info
     event_gender = select_from_enum(Gender, extract(line, 14, 1))
     event_gender_age = select_from_enum(GenderAge, extract(line, 15, 1))
-    distance = safe_cast(int, extract(line, 16, 6))
+    distance = safe_cast(float, extract(line, 16, 6))
     stroke = select_from_enum(Stroke, extract(line, 22, 1))
 
     # Have to set these now since swimmer ages are not available yet

@@ -264,7 +264,7 @@ class Event:
 
     # ID info
     number: str
-    distance: int
+    distance: float
     stroke: Stroke
     course: Course
     date_: Optional[date]
@@ -432,7 +432,7 @@ class Meet:
     def get_or_create_event(
         self,
         number: str,
-        distance: int,
+        distance: float,
         stroke: Stroke,
         course: Course,
         gender: Gender,
