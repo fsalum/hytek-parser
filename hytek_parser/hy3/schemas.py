@@ -180,6 +180,22 @@ class EventEntry:
     meet_division: Optional[str] = None
     exhibition: bool = False
 
+    # The entry's OWN event fields, as written on its E1/F1 line (cols 16-22
+    # and 51). An Event is keyed by event number alone, so when one number
+    # carries more than one distance -- a combined-distance event where
+    # swimmers choose 400 or 500, 1000 or 1650, or a split-request entry that
+    # records an intermediate split as its own official time -- the Event's
+    # distance is only the first one seen. These fields say what THIS entry
+    # swam. None on entries built before the parser set them.
+    distance: Optional[float] = None
+    stroke: Optional[Stroke] = None
+    course: Optional[Course] = None
+    # Col 96 of E1/F1. Observed values: "S" and "T" on split-request entries
+    # (an intermediate split recorded as an official time for a shorter
+    # distance; fee and seed are 0 and the distance differs from the event's).
+    # Blank on ordinary entries. Semantics of "S" vs "T" are not documented.
+    entry_flag: Optional[str] = None
+
     def __init__(
         self,
         swimmers: dict[int, Swimmer],
@@ -193,6 +209,10 @@ class EventEntry:
         relay_swim_team_code: Optional[str] = None,
         meet_division: Optional[str] = None,
         exhibition: bool = False,
+        distance: Optional[float] = None,
+        stroke: Optional[Stroke] = None,
+        course: Optional[Course] = None,
+        entry_flag: Optional[str] = None,
     ) -> None:
         self.swimmers = swimmers
         self.relay = relay
@@ -205,6 +225,10 @@ class EventEntry:
         self.relay_swim_team_code = relay_swim_team_code
         self.meet_division = meet_division
         self.exhibition = exhibition
+        self.distance = distance
+        self.stroke = stroke
+        self.course = course
+        self.entry_flag = entry_flag
 
         for course in ("prelim", "swimoff", "finals"):
             setattr(self, f"{course}_time", None)
@@ -237,7 +261,8 @@ class EventEntry:
         relay_swim_team_code, seed_time, seed_course) — not swimmers, which
         are populated later by F3.
         For individuals the identity is the existing (swimmers, event_number,
-        seed_time, seed_course, converted_seed_time, converted_seed_time_course).
+        seed_time, seed_course, converted_seed_time, converted_seed_time_course)
+        plus the entry's own distance.
         """
         if self.relay or other.relay:
             return (
@@ -250,6 +275,9 @@ class EventEntry:
             )
         return (
             self.swimmers == other.swimmers
+            # An entry at a different distance is a different swim, even for
+            # the same swimmer in the same event (a split-request entry).
+            and self.distance == other.distance
             and self.event_number == other.event_number
             and self.seed_time == other.seed_time
             and self.seed_course == other.seed_course
@@ -296,6 +324,10 @@ class Event:
         relay_swim_team_code: Optional[str] = None,
         meet_division: Optional[str] = None,
         exhibition: bool = False,
+        distance: Optional[float] = None,
+        stroke: Optional[Stroke] = None,
+        course: Optional[Course] = None,
+        entry_flag: Optional[str] = None,
     ) -> EventEntry:
         """Get an event entry or create one if needed."""
         entry = EventEntry(
@@ -310,6 +342,10 @@ class Event:
             relay_swim_team_code=relay_swim_team_code,
             meet_division=meet_division,
             exhibition=exhibition,
+            distance=distance,
+            stroke=stroke,
+            course=course,
+            entry_flag=entry_flag,
         )
         if self.entries and self.entries[-1].same_swimmer_entry_as(entry):
             # P/F entries always listed together: a swimmer (individuals) or a
