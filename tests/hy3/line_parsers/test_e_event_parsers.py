@@ -443,3 +443,43 @@ class TestEntryOwnEventFields(unittest.TestCase):
         event = file.meet.events["41C"]
         self.assertEqual(500.0, event.distance)
         self.assertEqual([500.0, 400.0], [e.distance for e in event.entries])
+
+
+class TestG1SplitIndexWrap(unittest.TestCase):
+    """The G1 split index is a two-character field and wraps at 100."""
+
+    def test_wrapped_indexes_continue_instead_of_overwriting(self):
+        from hytek_parser.hy3.line_parsers.g_split_parsers import g1_parser
+        opts = {"default_country": "USA"}
+        file = ParsedHytekFile()
+        file.meet = Meet()
+        file.meet.last_team = ("FOO", Team("Foo Bar", "FOO", "foo","","","","","","","","","","","",{}))
+        d = "D1M   27Hansen              Mads                                                        10272010 13                             27"
+        e1 = "E1M   27HanseMB  1500A 15109  0A 10.00 12C    0.00L    0.00L    0.00    0.00   NN               N                               10"
+        e2 = "E2F 1087.01L       0  1  5  2   2  0    0.00    0.00    0.00      1087.01     0.00     05292021K                          0     46"
+        g1a = "G1F 4    0.00F 8   66.75F12    0.00F16  139.54F20    0.00F24  212.15F28    0.00F32  284.59F36    0.00F40  357.38F44    0.00     42"
+        g1b = "G1F48  431.18F52    0.00F56  504.48F60    0.00F64  577.28F68    0.00F72  651.37F76    0.00F80  725.04F84    0.00F88  798.37     63"
+        g1c = "G1F92    0.00F96  871.63F00    0.00F04  945.32F08    0.00F12 1018.09F16    0.00F20 1087.01                                      79"
+        file = d1_parser(d, file, opts); file = e1_parser(e1, file, opts); file = e2_parser(e2, file, opts)
+        for ln in (g1a, g1b, g1c):
+            file = g1_parser(ln, file, opts)
+        splits = file.meet.events["12C"].last_entry.finals_splits
+        self.assertEqual(30, len(splits))
+        self.assertEqual(66.75, splits[8])          # early split survives
+        self.assertEqual(945.32, splits[104])       # "04" after the wrap -> 104
+        self.assertEqual(1087.01, splits[120])      # the finish, "20" -> 120
+        self.assertEqual(list(range(4, 121, 4)), sorted(splits))
+
+    def test_unwrapped_swim_is_unchanged(self):
+        from hytek_parser.hy3.line_parsers.g_split_parsers import g1_parser
+        opts = {"default_country": "USA"}
+        file = ParsedHytekFile()
+        file.meet = Meet()
+        file.meet.last_team = ("FOO", Team("Foo Bar", "FOO", "foo","","","","","","","","","","","",{}))
+        d = "D1F   27Hansen              Mads                                                        10272010 13                             27"
+        e1 = "E1F   27HanseFG   100A 13 14  0S  4.25 71    61.05Y   61.05Y    1.00    0.00   NN               N                       "
+        e2 = "E2F   59.26Y       0  1  8  8  16  0   59.34   59.25   59.25        59.26     0.00     12052009                         "
+        g1 = "G1F 2   28.47F 4   59.26                                                                                                "
+        file = d1_parser(d, file, opts); file = e1_parser(e1, file, opts); file = e2_parser(e2, file, opts)
+        file = g1_parser(g1, file, opts)
+        self.assertEqual({2: 28.47, 4: 59.26}, file.meet.events["71"].last_entry.finals_splits)
